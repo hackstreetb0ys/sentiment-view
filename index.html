@@ -1,0 +1,96 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <link rel="stylesheet" href="http://cdn.webix.com/edge/webix.css" type="text/css">
+    <script src="http://cdn.webix.com/edge/webix.js" type="text/javascript"></script>
+</head>
+<body>
+<style>
+    #app_here{
+        width:1000px; height:800px; margin:auto;
+        align: center;
+    }
+</style>
+<div id="app_here"></div>
+<script src="https://code.jquery.com/jquery.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/4.1.0/rx.lite.compat.js"></script>
+<script type="text/javascript" charset="utf-8">
+    webix.ready(function(){
+        webix.ui({
+            container:"app_here",
+            rows:[
+                {view:"form", id:"myform", elements:[
+                {
+                    cols:[
+                        { id: "tagsField",view:"text", name:"tagsField", placeholder:"#", align:"left"},
+                        { view:"button", value:"Add", width:70 , align:"right", click:add_row}
+                    ]
+                }]},
+                { view:"template",type:"header", template:"Twitter Sentiments! Brought to you by... Scala, Java, RxJS, Webbix, Docker, Tum Tum, AWS EC2 and Azure Cognitive Services" },
+                { view:"datatable",
+                    id: "mylist",
+                    autoConfig:true,
+                    columns:[
+                        { id:"tag", header:"Tag", template:"<strong>#id#</strong>", fillspace:true},
+                        { id:"positive",  header:"Positive Tweets" , template:"#positive#"},
+                        { id:"negative",  header:"Negative Tweets" , template:"#negative#"},
+                        { id:"delete",  header:"Remove Tag" , width: 150, template:"{common.trashIcon()} <input type='button' value='Remove Tag' class='removeButton'>"}
+                    ],
+                    onClick:{
+                        removeButton:function(ev, id){
+                            var item = $$("mylist").getItem(id);
+                            var itemId = item.id;
+                            $.ajax({url: "http://twitter-sentiment-play-dd62f3cf.ragnarula.svc.tutum.io/follow/".concat(encodeURIComponent(itemId)), type: 'DELETE', success: function(result){
+                                $$("mylist").remove(id);
+                            }});
+                        }
+                    }
+                }
+            ]
+        });
+    });
+
+    function add_row() {
+        var values = $$('myform').getValues();
+        var input = values['tagsField'].split(",");
+        console.log(input);
+        var headers = {"content-type":"application/json"};
+        $.ajax({url: "http://twitter-sentiment-play-dd62f3cf.ragnarula.svc.tutum.io/follow", data: JSON.stringify(input), type:'POST', headers: headers, success: function(result){
+            input.forEach(function(x){
+                $$("mylist").add({id:x, positive:0, negative:0});
+            });
+        }});
+    }
+
+    var timer = Rx.Observable.interval(5000);
+    var subject = new Rx.Subject();
+    var subSource = timer.subscribe(subject);
+
+
+    var subSubject1 = subject.subscribe(
+            function (x) {
+                $.ajax({url: "http://twitter-sentiment-play-dd62f3cf.ragnarula.svc.tutum.io/sentiment", success: function(result){
+//                $.ajax({url: "http://localhost:9000/sentiment", success: function(result){
+//                    $$("mylist").clearAll();
+                    for (var key in result) {
+                        if (result.hasOwnProperty(key)) {
+                            if($$("mylist").exists(key)){
+                                var item = $$("mylist").getItem(key);
+                                console.log(item);
+                                item.positive = result[key]['positive'];
+                                item.negative = result[key]['negative'];
+                            } else {
+                                $$("mylist").add({id:key, positive:result[key]['positive'], negative:result[key]['negative']});
+                            }
+                            $$("mylist").refresh()
+                        }
+                    }
+                }});
+            },
+            function (e) { console.log('onError: ' + e.message); },
+            function () { console.log('onCompleted');});
+
+</script>
+
+</body>
+</html>
